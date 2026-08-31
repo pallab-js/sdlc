@@ -4,7 +4,7 @@ public struct GitView: View {
     @EnvironmentObject var env: AppEnvironment
     @State private var commits = [GitCommit]()
     @State private var status = ""
-    @State private var activeTask: Swift.Task<Void, Never>?
+    @State private var activeTask: Task<Void, Never>?
     
     public init() {}
     
@@ -112,7 +112,7 @@ public struct GitView: View {
         }
         
         activeTask?.cancel()
-        activeTask = Swift.Task {
+        activeTask = Task {
             do {
                 status = try await env.gitRepository.getStatus(repoPath: ws.path)
                 commits = try await env.gitRepository.getCommits(repoPath: ws.path)

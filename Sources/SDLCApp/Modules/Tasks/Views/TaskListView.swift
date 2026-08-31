@@ -4,7 +4,7 @@ public struct TaskListView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: TaskListViewModel
     @State private var isShowingCreateSheet = false
-    @State private var activeTask: Swift.Task<Void, Never>?
+    @State private var activeTask: Task<Void, Never>?
     @State private var taskToDelete: ProjectTask?
     @State private var isShowingDeleteConfirmation = false
     public var project: Project
@@ -131,9 +131,9 @@ public struct TaskListView: View {
                     
                     Button("Create") {
                         if let ws = env.activeWorkspace {
-                            activeTask = Swift.Task {
+                            activeTask = Task {
                                 await viewModel.createTask(projectId: project.id, workspaceId: ws.id)
-                                if !Swift.Task.isCancelled && !viewModel.showError {
+                                if !Task.isCancelled && !viewModel.showError {
                                     isShowingCreateSheet = false
                                 }
                             }
@@ -150,7 +150,7 @@ public struct TaskListView: View {
             Button("Cancel", role: .cancel) { taskToDelete = nil }
             Button("Delete", role: .destructive) {
                 if let t = taskToDelete, let ws = env.activeWorkspace {
-                    self.activeTask = Swift.Task {
+                    self.activeTask = Task {
                         await viewModel.deleteTask(t, workspaceId: ws.id)
                     }
                 }
@@ -162,7 +162,7 @@ public struct TaskListView: View {
             }
         }
         .onAppear {
-            activeTask = Swift.Task {
+            activeTask = Task {
                 await viewModel.loadTasks(projectId: project.id)
             }
         }
@@ -273,7 +273,7 @@ public struct TaskListView: View {
     
     private func moveTask(_ task: ProjectTask, to status: Status) {
         if let ws = env.activeWorkspace {
-            self.activeTask = Swift.Task {
+            self.activeTask = Task {
                 await viewModel.updateTaskStatus(task, to: status, workspaceId: ws.id)
             }
         }

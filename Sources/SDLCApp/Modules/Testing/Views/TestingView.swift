@@ -3,7 +3,7 @@ import SwiftUI
 public struct TestingView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: TestingViewModel
-    @State private var activeTask: Swift.Task<Void, Never>?
+    @State private var activeTask: Task<Void, Never>?
     @State private var testCaseToDelete: TestCase?
     @State private var isShowingDeleteConfirmation = false
 
@@ -141,9 +141,9 @@ public struct TestingView: View {
                         .buttonStyle(.bordered)
                     Button("Create") {
                         if let ws = env.activeWorkspace {
-                            activeTask = Swift.Task {
+                            activeTask = Task {
                                 await viewModel.createTestCase(workspaceId: ws.id)
-                                if !Swift.Task.isCancelled && !viewModel.showError {
+                                if !Task.isCancelled && !viewModel.showError {
                                     viewModel.isShowingCreateSheet = false
                                 }
                             }
@@ -160,7 +160,7 @@ public struct TestingView: View {
             Button("Cancel", role: .cancel) { testCaseToDelete = nil }
             Button("Delete", role: .destructive) {
                 if let tc = testCaseToDelete, let ws = env.activeWorkspace {
-                    activeTask = Swift.Task {
+                    activeTask = Task {
                         await viewModel.deleteTestCase(tc, workspaceId: ws.id)
                     }
                 }
@@ -173,7 +173,7 @@ public struct TestingView: View {
         }
         .onAppear {
             if let ws = env.activeWorkspace {
-                activeTask = Swift.Task {
+                activeTask = Task {
                     await viewModel.loadTestCases(workspaceId: ws.id)
                     await viewModel.loadRequirements(workspaceId: ws.id)
                 }
@@ -182,7 +182,7 @@ public struct TestingView: View {
         .onChange(of: env.activeWorkspace?.id) { _, newId in
             activeTask?.cancel()
             if let id = newId {
-                activeTask = Swift.Task {
+                activeTask = Task {
                     await viewModel.loadTestCases(workspaceId: id)
                     await viewModel.loadRequirements(workspaceId: id)
                 }

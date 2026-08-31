@@ -4,7 +4,7 @@ public struct ProjectListView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: ProjectListViewModel
     @State private var isShowingCreateSheet = false
-    @State private var activeTask: Swift.Task<Void, Never>?
+    @State private var activeTask: Task<Void, Never>?
     @State private var projectToDelete: Project?
     @State private var isShowingDeleteConfirmation = false
     public var onSelectProject: (Project) -> Void
@@ -177,9 +177,9 @@ public struct ProjectListView: View {
                     
                     Button("Create") {
                         if let ws = env.activeWorkspace {
-                            activeTask = Swift.Task {
+                            activeTask = Task {
                                 await viewModel.createProject(workspaceId: ws.id)
-                                if !Swift.Task.isCancelled && !viewModel.showError {
+                                if !Task.isCancelled && !viewModel.showError {
                                     isShowingCreateSheet = false
                                 }
                             }
@@ -196,7 +196,7 @@ public struct ProjectListView: View {
             Button("Cancel", role: .cancel) { projectToDelete = nil }
             Button("Delete", role: .destructive) {
                 if let project = projectToDelete, let ws = env.activeWorkspace {
-                    activeTask = Swift.Task {
+                    activeTask = Task {
                         await viewModel.deleteProject(project, workspaceId: ws.id)
                     }
                 }
@@ -209,7 +209,7 @@ public struct ProjectListView: View {
         }
         .onAppear {
             if let ws = env.activeWorkspace {
-                activeTask = Swift.Task {
+                activeTask = Task {
                     await viewModel.loadProjects(workspaceId: ws.id)
                 }
             }
@@ -217,7 +217,7 @@ public struct ProjectListView: View {
         .onChange(of: env.activeWorkspace?.id) { _, newId in
             activeTask?.cancel()
             if let id = newId {
-                activeTask = Swift.Task {
+                activeTask = Task {
                     await viewModel.loadProjects(workspaceId: id)
                 }
             } else {

@@ -10,7 +10,7 @@ public class SearchViewModel: ObservableObject {
     @Published public var showError = false
     @Published public var errorMessage = ""
 
-    private var searchTask: Swift.Task<Void, Never>?
+    private var searchTask: Task<Void, Never>?
 
     public init(env: AppEnvironment) {
         self.env = env
@@ -27,17 +27,17 @@ public class SearchViewModel: ObservableObject {
             results = []
             return
         }
-        searchTask = Swift.Task {
+        searchTask = Task {
             isSearching = true
             defer { isSearching = false }
             do {
-                try await Swift.Task.sleep(nanoseconds: 150_000_000)
+                try await Task.sleep(nanoseconds: 150_000_000)
                 let items = try await env.searchService.search(query: trimmed, workspaceId: ws.id)
-                if !Swift.Task.isCancelled {
+                if !Task.isCancelled {
                     results = items
                 }
             } catch {
-                if !Swift.Task.isCancelled {
+                if !Task.isCancelled {
                     errorMessage = "Search failed: \(error.localizedDescription)"
                     showError = true
                     env.logger.error("Search failed: \(error)")
