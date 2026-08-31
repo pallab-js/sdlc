@@ -3,7 +3,7 @@ import SwiftUI
 public struct ReportView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: ReportViewModel
-    @State private var task: Swift.Task<Void, Never>?
+    @State private var activeTask: Swift.Task<Void, Never>?
 
     public init(env: AppEnvironment) {
         _viewModel = StateObject(wrappedValue: ReportViewModel(env: env))
@@ -127,18 +127,18 @@ public struct ReportView: View {
             refreshSummary()
         }
         .onChange(of: env.activeWorkspace?.id) { _, _ -> Void in
-            task?.cancel()
+            activeTask?.cancel()
             refreshSummary()
         }
         .onDisappear {
-            task?.cancel()
+            activeTask?.cancel()
         }
     }
 
     private func refreshSummary() {
         guard let ws = env.activeWorkspace else { return }
-        task?.cancel()
-        task = Swift.Task {
+        activeTask?.cancel()
+        activeTask = Swift.Task {
             await viewModel.refreshSummary(workspaceId: ws.id)
         }
     }

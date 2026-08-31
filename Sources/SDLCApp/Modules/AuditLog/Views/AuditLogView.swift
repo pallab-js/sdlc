@@ -3,7 +3,7 @@ import SwiftUI
 public struct AuditLogView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: AuditLogViewModel
-    @State private var task: Swift.Task<Void, Never>?
+    @State private var activeTask: Swift.Task<Void, Never>?
 
     public init(env: AppEnvironment) {
         _viewModel = StateObject(wrappedValue: AuditLogViewModel(env: env))
@@ -92,15 +92,15 @@ public struct AuditLogView: View {
         }
         .onAppear {
             if let ws = env.activeWorkspace {
-                task = Swift.Task {
+                activeTask = Swift.Task {
                     await viewModel.loadLogs(workspaceId: ws.id)
                 }
             }
         }
         .onChange(of: env.activeWorkspace?.id) { _, newId in
-            task?.cancel()
+            activeTask?.cancel()
             if let id = newId {
-                task = Swift.Task {
+                activeTask = Swift.Task {
                     await viewModel.loadLogs(workspaceId: id)
                 }
             } else {
@@ -108,7 +108,7 @@ public struct AuditLogView: View {
             }
         }
         .onDisappear {
-            task?.cancel()
+            activeTask?.cancel()
         }
     }
 

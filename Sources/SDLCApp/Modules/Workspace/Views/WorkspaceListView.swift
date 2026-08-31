@@ -5,7 +5,7 @@ public struct WorkspaceListView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: WorkspaceListViewModel
     @State private var isShowingCreateSheet = false
-    @State private var task: Swift.Task<Void, Never>?
+    @State private var activeTask: Swift.Task<Void, Never>?
     @State private var workspaceToDelete: Workspace?
     @State private var isShowingDeleteConfirmation = false
     @State private var exportError: String?
@@ -37,7 +37,7 @@ public struct WorkspaceListView: View {
                 }
                 
                 Button(action: {
-                    task = Swift.Task {
+                    activeTask = Swift.Task {
                         await env.seedDatabase()
                     }
                 }) {
@@ -173,7 +173,7 @@ public struct WorkspaceListView: View {
                     .buttonStyle(.bordered)
                     
                     Button("Create") {
-                        task = Swift.Task {
+                        activeTask = Swift.Task {
                             await viewModel.createWorkspace()
                             if !Swift.Task.isCancelled && !viewModel.showError {
                                 isShowingCreateSheet = false
@@ -191,7 +191,7 @@ public struct WorkspaceListView: View {
             Button("Cancel", role: .cancel) { workspaceToDelete = nil }
             Button("Delete", role: .destructive) {
                 if let ws = workspaceToDelete {
-                    task = Swift.Task {
+                    activeTask = Swift.Task {
                         await env.deleteWorkspace(ws)
                     }
                 }
@@ -203,12 +203,12 @@ public struct WorkspaceListView: View {
             }
         }
         .onAppear {
-            task = Swift.Task {
+            activeTask = Swift.Task {
                 await env.loadWorkspaces()
             }
         }
         .onDisappear {
-            task?.cancel()
+            activeTask?.cancel()
         }
     }
     
@@ -236,7 +236,7 @@ public struct WorkspaceListView: View {
         
         guard panel.runModal() == .OK, let url = panel.url else { return }
         
-        task = Swift.Task {
+        activeTask = Swift.Task {
             do {
                 try await env.exportService.exportWorkspaceToFile(ws, to: url)
                 exportError = nil
@@ -255,7 +255,7 @@ public struct WorkspaceListView: View {
         
         guard panel.runModal() == .OK, let url = panel.url else { return }
         
-        task = Swift.Task {
+        activeTask = Swift.Task {
             do {
                 let data = try await env.exportService.importWorkspace(from: url)
                 try await env.exportService.importWorkspaceData(data)

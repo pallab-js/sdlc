@@ -4,7 +4,7 @@ public struct GitView: View {
     @EnvironmentObject var env: AppEnvironment
     @State private var commits = [GitCommit]()
     @State private var status = ""
-    @State private var task: Swift.Task<Void, Never>?
+    @State private var activeTask: Swift.Task<Void, Never>?
     
     public init() {}
     
@@ -96,11 +96,11 @@ public struct GitView: View {
             refreshGitInfo()
         }
         .onChange(of: env.activeWorkspace?.id) { _, _ in
-            task?.cancel()
+            activeTask?.cancel()
             refreshGitInfo()
         }
         .onDisappear {
-            task?.cancel()
+            activeTask?.cancel()
         }
     }
     
@@ -111,8 +111,8 @@ public struct GitView: View {
             return
         }
         
-        task?.cancel()
-        task = Swift.Task {
+        activeTask?.cancel()
+        activeTask = Swift.Task {
             do {
                 status = try await env.gitRepository.getStatus(repoPath: ws.path)
                 commits = try await env.gitRepository.getCommits(repoPath: ws.path)

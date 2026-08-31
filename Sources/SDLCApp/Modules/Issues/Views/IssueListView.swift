@@ -6,7 +6,7 @@ public struct IssueListView: View {
     @State private var selectedProject: Project?
     @State private var projects: [Project] = []
     @State private var isShowingCreateSheet = false
-    @State private var task: Swift.Task<Void, Never>?
+    @State private var activeTask: Swift.Task<Void, Never>?
     @State private var issueToDelete: Issue?
     @State private var isShowingDeleteConfirmation = false
     
@@ -194,7 +194,7 @@ public struct IssueListView: View {
                     
                     Button("Log Issue") {
                         if let ws = env.activeWorkspace, let project = selectedProject {
-                            task = Swift.Task {
+                            activeTask = Swift.Task {
                                 await viewModel.createIssue(projectId: project.id, workspaceId: ws.id)
                                 if !Swift.Task.isCancelled && !viewModel.showError {
                                     isShowingCreateSheet = false
@@ -213,7 +213,7 @@ public struct IssueListView: View {
             Button("Cancel", role: .cancel) { issueToDelete = nil }
             Button("Delete", role: .destructive) {
                 if let issue = issueToDelete, let ws = env.activeWorkspace {
-                    task = Swift.Task {
+                    activeTask = Swift.Task {
                         await viewModel.deleteIssue(issue, workspaceId: ws.id)
                     }
                 }
@@ -228,15 +228,15 @@ public struct IssueListView: View {
             loadProjectsList()
         }
         .onChange(of: env.activeWorkspace?.id) { _, _ in
-            task?.cancel()
+            activeTask?.cancel()
             selectedProject = nil
             viewModel.issues = []
             loadProjectsList()
         }
         .onChange(of: selectedProject?.id) { _, newId in
-            task?.cancel()
+            activeTask?.cancel()
             if let id = newId {
-                task = Swift.Task {
+                activeTask = Swift.Task {
                     await viewModel.loadIssues(projectId: id)
                 }
             } else {
@@ -244,7 +244,7 @@ public struct IssueListView: View {
             }
         }
         .onDisappear {
-            task?.cancel()
+            activeTask?.cancel()
         }
     }
     
@@ -253,7 +253,7 @@ public struct IssueListView: View {
             projects = []
             return
         }
-        task = Swift.Task {
+        activeTask = Swift.Task {
             do {
                 projects = try await env.projectRepository.fetchAll(forWorkspace: ws.id)
                 selectedProject = projects.first

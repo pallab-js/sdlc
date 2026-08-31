@@ -4,7 +4,7 @@ public struct RequirementListView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: RequirementListViewModel
     @State private var isShowingCreateSheet = false
-    @State private var task: Swift.Task<Void, Never>?
+    @State private var activeTask: Swift.Task<Void, Never>?
     @State private var requirementToDelete: Requirement?
     @State private var isShowingDeleteConfirmation = false
     
@@ -137,7 +137,7 @@ public struct RequirementListView: View {
                     
                     Button("Create") {
                         if let ws = env.activeWorkspace {
-                            task = Swift.Task {
+                            activeTask = Swift.Task {
                                 await viewModel.createRequirement(workspaceId: ws.id)
                                 if !Swift.Task.isCancelled && !viewModel.showError {
                                     isShowingCreateSheet = false
@@ -156,7 +156,7 @@ public struct RequirementListView: View {
             Button("Cancel", role: .cancel) { requirementToDelete = nil }
             Button("Delete", role: .destructive) {
                 if let req = requirementToDelete, let ws = env.activeWorkspace {
-                    task = Swift.Task {
+                    activeTask = Swift.Task {
                         await viewModel.deleteRequirement(req, workspaceId: ws.id)
                     }
                 }
@@ -169,15 +169,15 @@ public struct RequirementListView: View {
         }
         .onAppear {
             if let ws = env.activeWorkspace {
-                task = Swift.Task {
+                activeTask = Swift.Task {
                     await viewModel.loadRequirements(workspaceId: ws.id)
                 }
             }
         }
         .onChange(of: env.activeWorkspace?.id) { _, newId in
-            task?.cancel()
+            activeTask?.cancel()
             if let id = newId {
-                task = Swift.Task {
+                activeTask = Swift.Task {
                     await viewModel.loadRequirements(workspaceId: id)
                 }
             } else {
@@ -185,7 +185,7 @@ public struct RequirementListView: View {
             }
         }
         .onDisappear {
-            task?.cancel()
+            activeTask?.cancel()
         }
     }
 }
