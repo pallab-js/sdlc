@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Resolve dependencies
+        run: swift package resolve
+
+      - name: Build (debug)
+        run: swift build --configuration debug
+
+      - name: Build (release)
+        run: swift build --configuration release
+
+      - name: Run tests
+        run: swift test --configuration debug --parallel
+
+  lint:
+    name: Lint
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for compiler warnings
+        run: swift build 2>&1 | tee build.log; ! grep -q "warning:" build.log || echo "::warning::Build contains warnings"
+
+      - name: Verify no force unwraps in production code
+        run: |
+          if grep -rn 'try!' Sources/SDLCApp/ --include="*.swift"; then
+            echo "::error::Found force try in production code"
+            exit 1
+          fi
+
+      - name: Verify no print statements in production code
+        run: |
+          if grep -rn '\bprint(' Sources/SDLCApp/ --include="*.swift"; then
+            echo "::warning::Found print() in production code — use Logger instead"
+          fi
