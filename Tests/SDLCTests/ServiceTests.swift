@@ -281,7 +281,7 @@ struct ServiceTests {
         try await workspaceRepo.insert(ws)
 
         try await auditLogService.log(workspaceId: ws.id, action: "FIRST", entityType: "E", entityId: UUID(), details: "First")
-        try await Swift.Task.sleep(nanoseconds: 1_000_000)
+        try await Task.sleep(nanoseconds: 1_000_000)
         try await auditLogService.log(workspaceId: ws.id, action: "SECOND", entityType: "E", entityId: UUID(), details: "Second")
 
         let logs = try await auditLogService.fetchLogs(forWorkspace: ws.id)
