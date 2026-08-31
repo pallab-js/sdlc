@@ -15,21 +15,17 @@ public class WorkspaceListViewModel: ObservableObject {
     }
     
     public func createWorkspace() async {
-        guard !nameInput.isEmpty else {
-            errorMessage = "Workspace name cannot be empty."
+        do {
+            try await env.createWorkspace(name: nameInput, path: pathInput)
+            nameInput = ""
+            pathInput = ""
+            showError = false
+        } catch let error as ValidationError {
+            errorMessage = error.message
             showError = true
-            return
-        }
-        guard !pathInput.isEmpty else {
-            errorMessage = "Please choose a workspace folder."
+        } catch {
+            errorMessage = "Failed to create workspace: \(error.localizedDescription)"
             showError = true
-            return
         }
-        
-        await env.createWorkspace(name: nameInput, path: pathInput)
-        
-        // Reset fields
-        nameInput = ""
-        pathInput = ""
     }
 }

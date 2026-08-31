@@ -4,18 +4,28 @@ public struct GitView: View {
     @EnvironmentObject var env: AppEnvironment
     @State private var commits = [GitCommit]()
     @State private var status = ""
+    @State private var task: Swift.Task<Void, Never>?
     
     public init() {}
     
     public var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Git Repository Browser")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Git Browser")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                    if let ws = env.activeWorkspace {
+                        Text("Workspace: \(ws.name)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
                 Spacer()
                 Button(action: refreshGitInfo) {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(.indigo)
             }
             .padding()
             .background(Color(nsColor: .windowBackgroundColor))
@@ -27,7 +37,6 @@ public struct GitView: View {
                     .frame(maxHeight: .infinity)
             } else {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Status
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Working Directory Status")
                             .font(.headline)
@@ -40,7 +49,6 @@ public struct GitView: View {
                     }
                     .padding([.horizontal, .top])
                     
-                    // Commits
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Recent Commit History")
                             .font(.headline)
@@ -67,10 +75,10 @@ public struct GitView: View {
                                         Text(commit.author)
                                             .font(.caption)
                                             .foregroundColor(.secondary)
-                                        Text("•")
+                                        Text("\u{2022}")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
-                                        Text(formatDate(commit.date))
+                                        Text(Self.formatDate(commit.date))
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
@@ -88,7 +96,11 @@ public struct GitView: View {
             refreshGitInfo()
         }
         .onChange(of: env.activeWorkspace?.id) { _, _ in
+            task?.cancel()
             refreshGitInfo()
+        }
+        .onDisappear {
+            task?.cancel()
         }
     }
     
@@ -99,7 +111,8 @@ public struct GitView: View {
             return
         }
         
-        Swift.Task {
+        task?.cancel()
+        task = Swift.Task {
             do {
                 status = try await env.gitRepository.getStatus(repoPath: ws.path)
                 commits = try await env.gitRepository.getCommits(repoPath: ws.path)
@@ -110,10 +123,14 @@ public struct GitView: View {
         }
     }
     
-    private func formatDate(_ date: Date) -> String {
+    private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
-        return formatter.string(from: date)
+        return formatter
+    }()
+    
+    private static func formatDate(_ date: Date) -> String {
+        dateFormatter.string(from: date)
     }
 }

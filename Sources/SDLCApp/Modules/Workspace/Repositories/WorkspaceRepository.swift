@@ -27,7 +27,10 @@ public final class WorkspaceRepository: WorkspaceRepositoryProtocol, Sendable {
     
     public func fetch(id: UUID) async throws -> Workspace? {
         try await dbQueue.read { db in
-            try Workspace.filter(Column("id") == id).fetchOne(db)
+            try Workspace
+                .filter(Column("id") == id)
+                .filter(Column("deletedAt") == nil)
+                .fetchOne(db)
         }
     }
     

@@ -7,6 +7,8 @@ public class SearchViewModel: ObservableObject {
     @Published public var query = ""
     @Published public var results = [SearchItem]()
     @Published public var isSearching = false
+    @Published public var showError = false
+    @Published public var errorMessage = ""
 
     private var searchTask: Swift.Task<Void, Never>?
 
@@ -36,6 +38,8 @@ public class SearchViewModel: ObservableObject {
                 }
             } catch {
                 if !Swift.Task.isCancelled {
+                    errorMessage = "Search failed: \(error.localizedDescription)"
+                    showError = true
                     env.logger.error("Search failed: \(error)")
                 }
             }
@@ -45,6 +49,7 @@ public class SearchViewModel: ObservableObject {
     public func clear() {
         query = ""
         results = []
+        showError = false
         searchTask?.cancel()
     }
 }

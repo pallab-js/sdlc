@@ -4,6 +4,9 @@ public struct RequirementListView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: RequirementListViewModel
     @State private var isShowingCreateSheet = false
+    @State private var task: Swift.Task<Void, Never>?
+    @State private var requirementToDelete: Requirement?
+    @State private var isShowingDeleteConfirmation = false
     
     public init(env: AppEnvironment) {
         _viewModel = StateObject(wrappedValue: RequirementListViewModel(env: env))
@@ -11,7 +14,6 @@ public struct RequirementListView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Requirements")
@@ -66,7 +68,7 @@ public struct RequirementListView: View {
                             }
                             Spacer()
                             
-                            Text(req.status)
+                            Text(req.status.displayName)
                                 .font(.system(size: 10, weight: .bold))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -75,11 +77,8 @@ public struct RequirementListView: View {
                                 .cornerRadius(6)
                             
                             Button(action: {
-                                if let ws = env.activeWorkspace {
-                                    Swift.Task {
-                                        await viewModel.deleteRequirement(req, workspaceId: ws.id)
-                                    }
-                                }
+                                requirementToDelete = req
+                                isShowingDeleteConfirmation = true
                             }) {
                                 Image(systemName: "trash")
                                     .foregroundColor(.red)
@@ -118,8 +117,8 @@ public struct RequirementListView: View {
                 }
                 
                 Picker("Status", selection: $viewModel.statusInput) {
-                    ForEach(["DRAFT", "PROPOSED", "APPROVED", "IMPLEMENTED"], id: \.self) { status in
-                        Text(status).tag(status)
+                    ForEach(RequirementStatus.allCases, id: \.self) { status in
+                        Text(status.displayName).tag(status)
                     }
                 }
                 
@@ -138,9 +137,11 @@ public struct RequirementListView: View {
                     
                     Button("Create") {
                         if let ws = env.activeWorkspace {
-                            Swift.Task {
+                            task = Swift.Task {
                                 await viewModel.createRequirement(workspaceId: ws.id)
-                                isShowingCreateSheet = false
+                                if !Swift.Task.isCancelled && !viewModel.showError {
+                                    isShowingCreateSheet = false
+                                }
                             }
                         }
                     }
@@ -151,21 +152,40 @@ public struct RequirementListView: View {
             .padding()
             .frame(width: 450)
         }
+        .alert("Delete Requirement", isPresented: $isShowingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { requirementToDelete = nil }
+            Button("Delete", role: .destructive) {
+                if let req = requirementToDelete, let ws = env.activeWorkspace {
+                    task = Swift.Task {
+                        await viewModel.deleteRequirement(req, workspaceId: ws.id)
+                    }
+                }
+                requirementToDelete = nil
+            }
+        } message: {
+            if let req = requirementToDelete {
+                Text("Are you sure you want to delete \"\(req.title)\"? This action cannot be undone.")
+            }
+        }
         .onAppear {
             if let ws = env.activeWorkspace {
-                Swift.Task {
+                task = Swift.Task {
                     await viewModel.loadRequirements(workspaceId: ws.id)
                 }
             }
         }
         .onChange(of: env.activeWorkspace?.id) { _, newId in
+            task?.cancel()
             if let id = newId {
-                Swift.Task {
+                task = Swift.Task {
                     await viewModel.loadRequirements(workspaceId: id)
                 }
             } else {
                 viewModel.requirements = []
             }
+        }
+        .onDisappear {
+            task?.cancel()
         }
     }
 }

@@ -4,7 +4,7 @@ import GRDB
 
 struct DatabaseMigrationTests {
     @Test func testMigrationsApplyCleanly() throws {
-        let dbService = DatabaseService(inMemory: true)
+        let dbService = try DatabaseService(inMemory: true)
         
         
         try dbService.dbQueue.read { db in

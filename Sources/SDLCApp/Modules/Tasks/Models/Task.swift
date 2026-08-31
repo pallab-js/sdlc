@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-public struct Task: Codable, FetchableRecord, PersistableRecord, TableRecord, Identifiable, Timestamped, SoftDeletable, Sendable {
+public struct ProjectTask: Codable, FetchableRecord, PersistableRecord, TableRecord, Identifiable, Timestamped, SoftDeletable, Sendable {
     public static let databaseTableName = "tasks"
     
     public var id: UUID

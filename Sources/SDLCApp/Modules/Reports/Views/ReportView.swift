@@ -3,6 +3,7 @@ import SwiftUI
 public struct ReportView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: ReportViewModel
+    @State private var task: Swift.Task<Void, Never>?
 
     public init(env: AppEnvironment) {
         _viewModel = StateObject(wrappedValue: ReportViewModel(env: env))
@@ -10,7 +11,6 @@ public struct ReportView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Workspace Reports & Insights")
@@ -95,7 +95,7 @@ public struct ReportView: View {
                                     Text("Completed Tasks: \(viewModel.reportData.completedTasksCount)")
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
-                                    Text("Pending Tasks: \(viewModel.reportData.totalTasks - viewModel.reportData.completedTasksCount)")
+                                    Text("Pending Tasks: \(max(0, viewModel.reportData.totalTasks - viewModel.reportData.completedTasksCount))")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
 
@@ -127,13 +127,18 @@ public struct ReportView: View {
             refreshSummary()
         }
         .onChange(of: env.activeWorkspace?.id) { _, _ -> Void in
+            task?.cancel()
             refreshSummary()
+        }
+        .onDisappear {
+            task?.cancel()
         }
     }
 
     private func refreshSummary() {
         guard let ws = env.activeWorkspace else { return }
-        Swift.Task {
+        task?.cancel()
+        task = Swift.Task {
             await viewModel.refreshSummary(workspaceId: ws.id)
         }
     }

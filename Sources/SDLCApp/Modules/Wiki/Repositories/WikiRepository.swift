@@ -20,6 +20,7 @@ public final class WikiRepository: WikiRepositoryProtocol, Sendable {
         try await dbQueue.read { db in
             try WikiDocument
                 .filter(Column("workspaceId") == workspaceId)
+                .filter(Column("deletedAt") == nil)
                 .order(Column("createdAt").desc)
                 .fetchAll(db)
         }
@@ -27,7 +28,10 @@ public final class WikiRepository: WikiRepositoryProtocol, Sendable {
     
     public func fetch(id: UUID) async throws -> WikiDocument? {
         try await dbQueue.read { db in
-            try WikiDocument.filter(Column("id") == id).fetchOne(db)
+            try WikiDocument
+                .filter(Column("id") == id)
+                .filter(Column("deletedAt") == nil)
+                .fetchOne(db)
         }
     }
     
@@ -48,9 +52,11 @@ public final class WikiRepository: WikiRepositoryProtocol, Sendable {
     }
     
     public func delete(_ document: WikiDocument) async throws {
-        let finalDoc = document
+        var toDelete = document
+        toDelete.deletedAt = Date()
+        let finalToDelete = toDelete
         try await dbQueue.write { db in
-            _ = try finalDoc.delete(db)
+            try finalToDelete.update(db)
         }
     }
 }

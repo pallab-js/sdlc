@@ -11,6 +11,23 @@ public struct SearchView: View {
     public var body: some View {
         VStack(spacing: 0) {
             HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Search")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                    if let ws = env.activeWorkspace {
+                        Text("Workspace: \(ws.name)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Spacer()
+            }
+            .padding()
+            .background(Color(nsColor: .windowBackgroundColor))
+            
+            Divider()
+            
+            HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
                 TextField("Search projects, tasks, requirements, issues, wiki, test cases...", text: $viewModel.query)
@@ -47,12 +64,12 @@ public struct SearchView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text(item.type.uppercased())
-                                .font(.system(size: 9, weight: .bold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
                                 .background(Color.indigo.opacity(0.15))
                                 .foregroundColor(.indigo)
-                                .cornerRadius(4)
+                                .cornerRadius(6)
 
                             Text(item.title)
                                 .font(.headline)

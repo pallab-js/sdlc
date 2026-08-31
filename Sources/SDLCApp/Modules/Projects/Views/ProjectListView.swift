@@ -4,6 +4,9 @@ public struct ProjectListView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: ProjectListViewModel
     @State private var isShowingCreateSheet = false
+    @State private var task: Swift.Task<Void, Never>?
+    @State private var projectToDelete: Project?
+    @State private var isShowingDeleteConfirmation = false
     public var onSelectProject: (Project) -> Void
     
     public init(env: AppEnvironment, onSelectProject: @escaping (Project) -> Void) {
@@ -13,7 +16,6 @@ public struct ProjectListView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Projects")
@@ -65,11 +67,8 @@ public struct ProjectListView: View {
                                         .lineLimit(1)
                                     Spacer()
                                     Button(action: {
-                                        if let ws = env.activeWorkspace {
-                                            Swift.Task {
-                                                await viewModel.deleteProject(project, workspaceId: ws.id)
-                                            }
-                                        }
+                                        projectToDelete = project
+                                        isShowingDeleteConfirmation = true
                                     }) {
                                         Image(systemName: "trash")
                                             .foregroundColor(Color.red)
@@ -86,9 +85,8 @@ public struct ProjectListView: View {
                                 Divider()
                                 
                                 HStack {
-                                    // Status Badge
                                     Text(project.status.displayName)
-                                        .font(.system(size: 10, weight: .semibold))
+                                        .font(.system(size: 10, weight: .bold))
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
                                         .background(statusColor(project.status).opacity(0.15))
@@ -97,9 +95,8 @@ public struct ProjectListView: View {
                                     
                                     Spacer()
                                     
-                                    // Priority Badge
                                     Text(project.priority.displayName)
-                                        .font(.system(size: 10, weight: .semibold))
+                                        .font(.system(size: 10, weight: .bold))
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
                                         .background(priorityColor(project.priority).opacity(0.15))
@@ -180,9 +177,11 @@ public struct ProjectListView: View {
                     
                     Button("Create") {
                         if let ws = env.activeWorkspace {
-                            Swift.Task {
+                            task = Swift.Task {
                                 await viewModel.createProject(workspaceId: ws.id)
-                                isShowingCreateSheet = false
+                                if !Swift.Task.isCancelled && !viewModel.showError {
+                                    isShowingCreateSheet = false
+                                }
                             }
                         }
                     }
@@ -193,21 +192,40 @@ public struct ProjectListView: View {
             .padding()
             .frame(width: 450)
         }
+        .alert("Delete Project", isPresented: $isShowingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { projectToDelete = nil }
+            Button("Delete", role: .destructive) {
+                if let project = projectToDelete, let ws = env.activeWorkspace {
+                    task = Swift.Task {
+                        await viewModel.deleteProject(project, workspaceId: ws.id)
+                    }
+                }
+                projectToDelete = nil
+            }
+        } message: {
+            if let project = projectToDelete {
+                Text("Are you sure you want to delete \"\(project.name)\"? This action cannot be undone.")
+            }
+        }
         .onAppear {
             if let ws = env.activeWorkspace {
-                Swift.Task {
+                task = Swift.Task {
                     await viewModel.loadProjects(workspaceId: ws.id)
                 }
             }
         }
         .onChange(of: env.activeWorkspace?.id) { _, newId in
+            task?.cancel()
             if let id = newId {
-                Swift.Task {
+                task = Swift.Task {
                     await viewModel.loadProjects(workspaceId: id)
                 }
             } else {
                 viewModel.projects = []
             }
+        }
+        .onDisappear {
+            task?.cancel()
         }
     }
     

@@ -1,24 +1,24 @@
 import Foundation
 import GRDB
 
-public protocol TaskRepositoryProtocol {
-    func fetchAll(forProject projectId: UUID) async throws -> [Task]
-    func fetch(id: UUID) async throws -> Task?
-    func insert(_ task: Task) async throws
-    func update(_ task: Task) async throws
-    func delete(_ task: Task) async throws
+public protocol ProjectTaskRepositoryProtocol {
+    func fetchAll(forProject projectId: UUID) async throws -> [ProjectTask]
+    func fetch(id: UUID) async throws -> ProjectTask?
+    func insert(_ task: ProjectTask) async throws
+    func update(_ task: ProjectTask) async throws
+    func delete(_ task: ProjectTask) async throws
 }
 
-public final class TaskRepository: TaskRepositoryProtocol, Sendable {
+public final class ProjectTaskRepository: ProjectTaskRepositoryProtocol, Sendable {
     private let dbQueue: DatabaseQueue
     
     public init(dbQueue: DatabaseQueue) {
         self.dbQueue = dbQueue
     }
     
-    public func fetchAll(forProject projectId: UUID) async throws -> [Task] {
+    public func fetchAll(forProject projectId: UUID) async throws -> [ProjectTask] {
         try await dbQueue.read { db in
-            try Task
+            try ProjectTask
                 .filter(Column("projectId") == projectId)
                 .filter(Column("deletedAt") == nil)
                 .order(Column("createdAt").desc)
@@ -26,20 +26,23 @@ public final class TaskRepository: TaskRepositoryProtocol, Sendable {
         }
     }
     
-    public func fetch(id: UUID) async throws -> Task? {
+    public func fetch(id: UUID) async throws -> ProjectTask? {
         try await dbQueue.read { db in
-            try Task.filter(Column("id") == id).fetchOne(db)
+            try ProjectTask
+                .filter(Column("id") == id)
+                .filter(Column("deletedAt") == nil)
+                .fetchOne(db)
         }
     }
     
-    public func insert(_ task: Task) async throws {
+    public func insert(_ task: ProjectTask) async throws {
         let finalTask = task
         try await dbQueue.write { db in
             try finalTask.insert(db)
         }
     }
     
-    public func update(_ task: Task) async throws {
+    public func update(_ task: ProjectTask) async throws {
         var updated = task
         updated.updatedAt = Date()
         let finalUpdated = updated
@@ -48,7 +51,7 @@ public final class TaskRepository: TaskRepositoryProtocol, Sendable {
         }
     }
     
-    public func delete(_ task: Task) async throws {
+    public func delete(_ task: ProjectTask) async throws {
         var toDelete = task
         toDelete.deletedAt = Date()
         let finalToDelete = toDelete

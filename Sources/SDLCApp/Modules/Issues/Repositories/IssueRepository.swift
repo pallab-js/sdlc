@@ -28,7 +28,10 @@ public final class IssueRepository: IssueRepositoryProtocol, Sendable {
     
     public func fetch(id: UUID) async throws -> Issue? {
         try await dbQueue.read { db in
-            try Issue.filter(Column("id") == id).fetchOne(db)
+            try Issue
+                .filter(Column("id") == id)
+                .filter(Column("deletedAt") == nil)
+                .fetchOne(db)
         }
     }
     

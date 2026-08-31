@@ -28,7 +28,10 @@ public final class RequirementRepository: RequirementRepositoryProtocol, Sendabl
     
     public func fetch(id: UUID) async throws -> Requirement? {
         try await dbQueue.read { db in
-            try Requirement.filter(Column("id") == id).fetchOne(db)
+            try Requirement
+                .filter(Column("id") == id)
+                .filter(Column("deletedAt") == nil)
+                .fetchOne(db)
         }
     }
     

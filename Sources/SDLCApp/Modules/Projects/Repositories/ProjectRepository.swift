@@ -28,7 +28,10 @@ public final class ProjectRepository: ProjectRepositoryProtocol, Sendable {
     
     public func fetch(id: UUID) async throws -> Project? {
         try await dbQueue.read { db in
-            try Project.filter(Column("id") == id).fetchOne(db)
+            try Project
+                .filter(Column("id") == id)
+                .filter(Column("deletedAt") == nil)
+                .fetchOne(db)
         }
     }
     

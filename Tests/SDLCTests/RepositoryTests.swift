@@ -4,15 +4,16 @@ import GRDB
 import Foundation
 
 struct RepositoryTests {
-    private let dbService = DatabaseService(inMemory: true)
+    private let dbService: DatabaseService
     private let workspaceRepo: WorkspaceRepository
     private let projectRepo: ProjectRepository
-    private let taskRepo: TaskRepository
+    private let taskRepo: ProjectTaskRepository
     
-    init() {
+    init() throws {
+        dbService = try DatabaseService(inMemory: true)
         workspaceRepo = WorkspaceRepository(dbQueue: dbService.dbQueue)
         projectRepo = ProjectRepository(dbQueue: dbService.dbQueue)
-        taskRepo = TaskRepository(dbQueue: dbService.dbQueue)
+        taskRepo = ProjectTaskRepository(dbQueue: dbService.dbQueue)
     }
     
     @Test func testWorkspaceCRUD() async throws {
@@ -43,9 +44,9 @@ struct RepositoryTests {
         let afterDelete = try await workspaceRepo.fetchAll()
         #expect(afterDelete.isEmpty)
         
-        // Raw fetch should still show deletedAt is not nil
+        // fetch(id:) should not return soft-deleted workspaces
         let rawFetched = try await workspaceRepo.fetch(id: ws.id)
-        #expect(rawFetched?.deletedAt != nil)
+        #expect(rawFetched == nil)
     }
     
     @Test func testProjectCRUD() async throws {
@@ -80,7 +81,7 @@ struct RepositoryTests {
         let project = Project(workspaceId: ws.id, name: "Project A", description: "Desc A")
         try await projectRepo.insert(project)
         
-        let task = Task(projectId: project.id, title: "Task 1", description: "Desc 1", status: .todo, priority: .high)
+        let task = ProjectTask(projectId: project.id, title: "Task 1", description: "Desc 1", status: .todo, priority: .high)
         
         // Insert
         try await taskRepo.insert(task)

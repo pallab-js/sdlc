@@ -8,12 +8,12 @@ public struct Requirement: Codable, FetchableRecord, PersistableRecord, TableRec
     public var workspaceId: UUID
     public var title: String
     public var description: String
-    public var status: String
+    public var status: RequirementStatus
     public var createdAt: Date
     public var updatedAt: Date
     public var deletedAt: Date?
     
-    public init(id: UUID = UUID(), workspaceId: UUID, title: String, description: String, status: String = "DRAFT", createdAt: Date = Date(), updatedAt: Date = Date(), deletedAt: Date? = nil) {
+    public init(id: UUID = UUID(), workspaceId: UUID, title: String, description: String, status: RequirementStatus = .draft, createdAt: Date = Date(), updatedAt: Date = Date(), deletedAt: Date? = nil) {
         self.id = id
         self.workspaceId = workspaceId
         self.title = title

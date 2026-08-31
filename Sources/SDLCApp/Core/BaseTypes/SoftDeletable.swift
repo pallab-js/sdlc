@@ -10,8 +10,3 @@ extension SoftDeletable {
         return deletedAt != nil
     }
 }
-public struct SoftDeletableRecordHelper {
-    public static func markAsDeleted<T: SoftDeletable>(_ record: inout T) {
-        record.deletedAt = Date()
-    }
-}

@@ -6,6 +6,8 @@ public class AuditLogViewModel: ObservableObject {
 
     @Published public var logs: [ActivityLog] = []
     @Published public var filterEntityType: String?
+    @Published public var showError = false
+    @Published public var errorMessage = ""
 
     public var filteredLogs: [ActivityLog] {
         if let filter = filterEntityType {
@@ -26,6 +28,8 @@ public class AuditLogViewModel: ObservableObject {
         do {
             logs = try await env.auditLogService.fetchLogs(forWorkspace: workspaceId)
         } catch {
+            errorMessage = "Failed to load activity logs: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to load audit logs: \(error)")
         }
     }

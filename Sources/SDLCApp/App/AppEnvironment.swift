@@ -7,15 +7,15 @@ public class AppEnvironment: ObservableObject {
     public let databaseService: DatabaseService
     public let logger: Logger
     
-    // Services
     public let auditLogService: AuditLogService
     public let gitService: GitService
     public let searchService: SearchService
+    public let seedDataService: SeedDataService
+    public let exportService: WorkspaceExportService
     
-    // Repositories
     public let workspaceRepository: WorkspaceRepository
     public let projectRepository: ProjectRepository
-    public let taskRepository: TaskRepository
+    public let taskRepository: ProjectTaskRepository
     public let requirementRepository: RequirementRepository
     public let issueRepository: IssueRepository
     public let wikiRepository: WikiRepository
@@ -24,27 +24,37 @@ public class AppEnvironment: ObservableObject {
     public let reportRepository: ReportRepository
     public let testingRepository: TestingRepository
     
-    // State
     @Published public var activeWorkspace: Workspace?
     @Published public var workspaces: [Workspace] = []
+    @Published public var appError: AppError?
     
-    public init(inMemory: Bool = false, dbPath: String? = nil) {
+    public struct AppError: Identifiable {
+        public let id = UUID()
+        public let message: String
+    }
+    
+    public init(inMemory: Bool = false, dbPath: String? = nil) throws {
         var log = Logger(label: "com.offline.sdlc")
+        #if DEBUG
         log.logLevel = .debug
+        #else
+        log.logLevel = .info
+        #endif
         self.logger = log
         
-        let dbService = DatabaseService(inMemory: inMemory, dbPath: dbPath)
-        self.databaseService = dbService
+        self.databaseService = try DatabaseService(inMemory: inMemory, dbPath: dbPath)
         
-        let queue = dbService.dbQueue
+        let queue = databaseService.dbQueue
         
         self.auditLogService = AuditLogService(dbQueue: queue)
         self.gitService = GitService()
         self.searchService = SearchService(dbQueue: queue)
+        self.seedDataService = SeedDataService(dbQueue: queue, logger: log)
+        self.exportService = WorkspaceExportService(dbQueue: queue)
         
         self.workspaceRepository = WorkspaceRepository(dbQueue: queue)
         self.projectRepository = ProjectRepository(dbQueue: queue)
-        self.taskRepository = TaskRepository(dbQueue: queue)
+        self.taskRepository = ProjectTaskRepository(dbQueue: queue)
         self.requirementRepository = RequirementRepository(dbQueue: queue)
         self.issueRepository = IssueRepository(dbQueue: queue)
         self.wikiRepository = WikiRepository(dbQueue: queue)
@@ -52,6 +62,10 @@ public class AppEnvironment: ObservableObject {
         self.searchRepository = SearchRepository(searchService: searchService)
         self.reportRepository = ReportRepository(dbQueue: queue)
         self.testingRepository = TestingRepository(dbQueue: queue)
+    }
+    
+    public func showError(_ message: String) {
+        appError = AppError(message: message)
     }
     
     @MainActor
@@ -62,7 +76,9 @@ public class AppEnvironment: ObservableObject {
                 activeWorkspace = first
             }
         } catch {
-            logger.error("Failed to load workspaces: \(error)")
+            let msg = "Failed to load workspaces: \(error.localizedDescription)"
+            logger.error("\(msg)")
+            showError(msg)
         }
     }
     
@@ -72,16 +88,15 @@ public class AppEnvironment: ObservableObject {
     }
     
     @MainActor
-    public func createWorkspace(name: String, path: String) async {
+    public func createWorkspace(name: String, path: String) async throws {
+        try InputValidator.validateName(name, fieldName: "Workspace name")
+        try InputValidator.validatePath(path)
+        
         let newWorkspace = Workspace(name: name, path: path)
-        do {
-            try await workspaceRepository.insert(newWorkspace)
-            try await auditLogService.log(workspaceId: newWorkspace.id, action: "CREATE", entityType: "Workspace", entityId: newWorkspace.id, details: "Created workspace \(name)")
-            await loadWorkspaces()
-            activeWorkspace = newWorkspace
-        } catch {
-            logger.error("Failed to create workspace: \(error)")
-        }
+        try await workspaceRepository.insert(newWorkspace)
+        try await auditLogService.log(workspaceId: newWorkspace.id, action: "CREATE", entityType: "Workspace", entityId: newWorkspace.id, details: "Created workspace \(name)")
+        await loadWorkspaces()
+        activeWorkspace = newWorkspace
     }
     
     @MainActor
@@ -94,7 +109,22 @@ public class AppEnvironment: ObservableObject {
             }
             await loadWorkspaces()
         } catch {
-            logger.error("Failed to delete workspace: \(error)")
+            let msg = "Failed to delete workspace: \(error.localizedDescription)"
+            logger.error("\(msg)")
+            showError(msg)
+        }
+    }
+    
+    @MainActor
+    public func seedDatabase() async {
+        do {
+            try await seedDataService.seedAll()
+            await loadWorkspaces()
+            logger.info("Database seeded successfully")
+        } catch {
+            let msg = "Failed to seed database: \(error.localizedDescription)"
+            logger.error("\(msg)")
+            showError(msg)
         }
     }
 }

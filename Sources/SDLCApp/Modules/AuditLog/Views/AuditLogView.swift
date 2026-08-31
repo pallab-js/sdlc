@@ -3,6 +3,7 @@ import SwiftUI
 public struct AuditLogView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: AuditLogViewModel
+    @State private var task: Swift.Task<Void, Never>?
 
     public init(env: AppEnvironment) {
         _viewModel = StateObject(wrappedValue: AuditLogViewModel(env: env))
@@ -62,11 +63,11 @@ public struct AuditLogView: View {
                             HStack {
                                 Text(log.action)
                                     .font(.system(size: 10, weight: .bold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
                                     .background(colorForAction(log.action).opacity(0.15))
                                     .foregroundColor(colorForAction(log.action))
-                                    .cornerRadius(4)
+                                    .cornerRadius(6)
 
                                 Text(log.entityType)
                                     .font(.caption)
@@ -91,19 +92,23 @@ public struct AuditLogView: View {
         }
         .onAppear {
             if let ws = env.activeWorkspace {
-                Swift.Task {
+                task = Swift.Task {
                     await viewModel.loadLogs(workspaceId: ws.id)
                 }
             }
         }
         .onChange(of: env.activeWorkspace?.id) { _, newId in
+            task?.cancel()
             if let id = newId {
-                Swift.Task {
+                task = Swift.Task {
                     await viewModel.loadLogs(workspaceId: id)
                 }
             } else {
                 viewModel.logs = []
             }
+        }
+        .onDisappear {
+            task?.cancel()
         }
     }
 

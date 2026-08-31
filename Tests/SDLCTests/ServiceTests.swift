@@ -4,7 +4,7 @@ import GRDB
 import Foundation
 
 struct ServiceTests {
-    private let dbService = DatabaseService(inMemory: true)
+    private let dbService: DatabaseService
     private let requirementRepo: RequirementRepository
     private let issueRepo: IssueRepository
     private let wikiRepo: WikiRepository
@@ -13,10 +13,11 @@ struct ServiceTests {
     private let searchService: SearchService
     private let reportRepo: ReportRepository
     private let projectRepo: ProjectRepository
-    private let taskRepo: TaskRepository
+    private let taskRepo: ProjectTaskRepository
     private let workspaceRepo: WorkspaceRepository
 
-    init() {
+    init() throws {
+        dbService = try DatabaseService(inMemory: true)
         requirementRepo = RequirementRepository(dbQueue: dbService.dbQueue)
         issueRepo = IssueRepository(dbQueue: dbService.dbQueue)
         wikiRepo = WikiRepository(dbQueue: dbService.dbQueue)
@@ -25,7 +26,7 @@ struct ServiceTests {
         searchService = SearchService(dbQueue: dbService.dbQueue)
         reportRepo = ReportRepository(dbQueue: dbService.dbQueue)
         projectRepo = ProjectRepository(dbQueue: dbService.dbQueue)
-        taskRepo = TaskRepository(dbQueue: dbService.dbQueue)
+        taskRepo = ProjectTaskRepository(dbQueue: dbService.dbQueue)
         workspaceRepo = WorkspaceRepository(dbQueue: dbService.dbQueue)
     }
 
@@ -35,24 +36,24 @@ struct ServiceTests {
         let ws = Workspace(name: "WS", path: "/path")
         try await workspaceRepo.insert(ws)
 
-        let req = Requirement(workspaceId: ws.id, title: "Req A", description: "Desc A", status: "DRAFT")
+        let req = Requirement(workspaceId: ws.id, title: "Req A", description: "Desc A", status: .draft)
         try await requirementRepo.insert(req)
 
         let fetched = try await requirementRepo.fetch(id: req.id)
         #expect(fetched != nil)
         #expect(fetched?.title == "Req A")
-        #expect(fetched?.status == "DRAFT")
+        #expect(fetched?.status == .draft)
 
         let all = try await requirementRepo.fetchAll(forWorkspace: ws.id)
         #expect(all.count == 1)
 
         var updated = req
         updated.title = "Req A Updated"
-        updated.status = "APPROVED"
+        updated.status = .approved
         try await requirementRepo.update(updated)
         let fetchedUpdated = try await requirementRepo.fetch(id: req.id)
         #expect(fetchedUpdated?.title == "Req A Updated")
-        #expect(fetchedUpdated?.status == "APPROVED")
+        #expect(fetchedUpdated?.status == .approved)
 
         try await requirementRepo.delete(req)
         let afterDelete = try await requirementRepo.fetchAll(forWorkspace: ws.id)
@@ -222,7 +223,7 @@ struct ServiceTests {
 
         let project = Project(workspaceId: ws.id, name: "Project X", description: "A")
         try await projectRepo.insert(project)
-        let task = Task(projectId: project.id, title: "Task X", description: "B", status: .todo, priority: .medium)
+        let task = ProjectTask(projectId: project.id, title: "Task X", description: "B", status: .todo, priority: .medium)
         try await taskRepo.insert(task)
         let req = Requirement(workspaceId: ws.id, title: "Req X", description: "C")
         try await requirementRepo.insert(req)
@@ -311,9 +312,9 @@ struct ServiceTests {
         let project2 = Project(workspaceId: ws.id, name: "P2", description: "D2")
         try await projectRepo.insert(project2)
 
-        let task1 = Task(projectId: project.id, title: "T1", description: "", status: .done, priority: .medium)
-        let task2 = Task(projectId: project.id, title: "T2", description: "", status: .todo, priority: .medium)
-        let task3 = Task(projectId: project2.id, title: "T3", description: "", status: .done, priority: .medium)
+        let task1 = ProjectTask(projectId: project.id, title: "T1", description: "", status: .done, priority: .medium)
+        let task2 = ProjectTask(projectId: project.id, title: "T2", description: "", status: .todo, priority: .medium)
+        let task3 = ProjectTask(projectId: project2.id, title: "T3", description: "", status: .done, priority: .medium)
         try await taskRepo.insert(task1)
         try await taskRepo.insert(task2)
         try await taskRepo.insert(task3)
@@ -335,7 +336,7 @@ struct ServiceTests {
         let project = Project(workspaceId: ws.id, name: "P1", description: "D1")
         try await projectRepo.insert(project)
 
-        let task = Task(projectId: project.id, title: "T1", description: "", status: .done, priority: .medium)
+        let task = ProjectTask(projectId: project.id, title: "T1", description: "", status: .done, priority: .medium)
         try await taskRepo.insert(task)
         try await taskRepo.delete(task)
 

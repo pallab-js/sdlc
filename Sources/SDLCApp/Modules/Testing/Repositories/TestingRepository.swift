@@ -21,6 +21,7 @@ public final class TestingRepository: TestingRepositoryProtocol, Sendable {
         try await dbQueue.read { db in
             try TestCase
                 .filter(Column("requirementId") == requirementId)
+                .filter(Column("deletedAt") == nil)
                 .order(Column("createdAt").desc)
                 .fetchAll(db)
         }
@@ -31,7 +32,7 @@ public final class TestingRepository: TestingRepositoryProtocol, Sendable {
             try TestCase.fetchAll(db, sql: """
                 SELECT tc.* FROM test_cases tc
                 LEFT JOIN requirements r ON tc.requirementId = r.id
-                WHERE r.workspaceId = ?
+                WHERE r.workspaceId = ? AND tc.deletedAt IS NULL
                 ORDER BY tc.createdAt DESC
             """, arguments: [workspaceId])
         }
@@ -39,7 +40,10 @@ public final class TestingRepository: TestingRepositoryProtocol, Sendable {
     
     public func fetch(id: UUID) async throws -> TestCase? {
         try await dbQueue.read { db in
-            try TestCase.filter(Column("id") == id).fetchOne(db)
+            try TestCase
+                .filter(Column("id") == id)
+                .filter(Column("deletedAt") == nil)
+                .fetchOne(db)
         }
     }
 
@@ -60,9 +64,11 @@ public final class TestingRepository: TestingRepositoryProtocol, Sendable {
     }
     
     public func delete(_ testCase: TestCase) async throws {
-        let finalTestCase = testCase
+        var toDelete = testCase
+        toDelete.deletedAt = Date()
+        let finalToDelete = toDelete
         try await dbQueue.write { db in
-            _ = try finalTestCase.delete(db)
+            try finalToDelete.update(db)
         }
     }
 }

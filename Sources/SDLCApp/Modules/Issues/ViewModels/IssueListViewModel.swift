@@ -22,20 +22,29 @@ public class IssueListViewModel: ObservableObject {
         do {
             self.issues = try await env.issueRepository.fetchAll(forProject: projectId)
         } catch {
+            errorMessage = "Failed to load issues: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to load issues: \(error)")
         }
     }
     
     public func createIssue(projectId: UUID, workspaceId: UUID) async {
-        guard !titleInput.isEmpty else {
-            errorMessage = "Issue title cannot be empty."
+        do {
+            try InputValidator.validateName(titleInput, fieldName: "Issue title")
+            try InputValidator.validateDescription(descInput)
+        } catch let error as ValidationError {
+            errorMessage = error.message
+            showError = true
+            return
+        } catch {
+            errorMessage = error.localizedDescription
             showError = true
             return
         }
         
         let newIssue = Issue(
             projectId: projectId,
-            title: titleInput,
+            title: titleInput.trimmingCharacters(in: .whitespacesAndNewlines),
             description: descInput,
             status: statusInput,
             priority: priorityInput,
@@ -53,13 +62,15 @@ public class IssueListViewModel: ObservableObject {
             )
             await loadIssues(projectId: projectId)
             
-            // reset
             titleInput = ""
             descInput = ""
             statusInput = .todo
             priorityInput = .medium
             severityInput = .medium
+            showError = false
         } catch {
+            errorMessage = "Failed to create issue: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to create issue: \(error)")
         }
     }
@@ -76,6 +87,8 @@ public class IssueListViewModel: ObservableObject {
             )
             await loadIssues(projectId: issue.projectId)
         } catch {
+            errorMessage = "Failed to delete issue: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to delete issue: \(error)")
         }
     }

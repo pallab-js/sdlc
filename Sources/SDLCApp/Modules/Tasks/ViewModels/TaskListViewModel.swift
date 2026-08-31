@@ -5,7 +5,7 @@ import Combine
 public class TaskListViewModel: ObservableObject {
     private let env: AppEnvironment
     
-    @Published public var tasks: [Task] = []
+    @Published public var tasks: [ProjectTask] = []
     @Published public var titleInput: String = ""
     @Published public var descInput: String = ""
     @Published public var statusInput: Status = .todo
@@ -19,24 +19,37 @@ public class TaskListViewModel: ObservableObject {
         self.env = env
     }
     
+    public func tasks(for status: Status) -> [ProjectTask] {
+        tasks.filter { $0.status == status }
+    }
+    
     public func loadTasks(projectId: UUID) async {
         do {
             self.tasks = try await env.taskRepository.fetchAll(forProject: projectId)
         } catch {
+            errorMessage = "Failed to load tasks: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to load tasks: \(error)")
         }
     }
     
     public func createTask(projectId: UUID, workspaceId: UUID) async {
-        guard !titleInput.isEmpty else {
-            errorMessage = "Task title cannot be empty."
+        do {
+            try InputValidator.validateName(titleInput, fieldName: "Task title")
+            try InputValidator.validateDescription(descInput)
+        } catch let error as ValidationError {
+            errorMessage = error.message
+            showError = true
+            return
+        } catch {
+            errorMessage = error.localizedDescription
             showError = true
             return
         }
         
-        let newTask = Task(
+        let newTask = ProjectTask(
             projectId: projectId,
-            title: titleInput,
+            title: titleInput.trimmingCharacters(in: .whitespacesAndNewlines),
             description: descInput,
             status: statusInput,
             priority: priorityInput,
@@ -54,18 +67,20 @@ public class TaskListViewModel: ObservableObject {
             )
             await loadTasks(projectId: projectId)
             
-            // reset
             titleInput = ""
             descInput = ""
             statusInput = .todo
             priorityInput = .medium
             isDueDateEnabled = false
+            showError = false
         } catch {
+            errorMessage = "Failed to create task: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to create task: \(error)")
         }
     }
     
-    public func updateTaskStatus(_ task: Task, to newStatus: Status, workspaceId: UUID) async {
+    public func updateTaskStatus(_ task: ProjectTask, to newStatus: Status, workspaceId: UUID) async {
         var updated = task
         updated.status = newStatus
         do {
@@ -79,11 +94,13 @@ public class TaskListViewModel: ObservableObject {
             )
             await loadTasks(projectId: task.projectId)
         } catch {
+            errorMessage = "Failed to update task: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to update task status: \(error)")
         }
     }
     
-    public func deleteTask(_ task: Task, workspaceId: UUID) async {
+    public func deleteTask(_ task: ProjectTask, workspaceId: UUID) async {
         do {
             try await env.taskRepository.delete(task)
             try await env.auditLogService.log(
@@ -95,6 +112,8 @@ public class TaskListViewModel: ObservableObject {
             )
             await loadTasks(projectId: task.projectId)
         } catch {
+            errorMessage = "Failed to delete task: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to delete task: \(error)")
         }
     }

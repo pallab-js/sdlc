@@ -3,6 +3,9 @@ import SwiftUI
 public struct TestingView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: TestingViewModel
+    @State private var task: Swift.Task<Void, Never>?
+    @State private var testCaseToDelete: TestCase?
+    @State private var isShowingDeleteConfirmation = false
 
     public init(env: AppEnvironment) {
         _viewModel = StateObject(wrappedValue: TestingViewModel(env: env))
@@ -71,11 +74,8 @@ public struct TestingView: View {
                                 Spacer()
 
                                 Button(action: {
-                                    Swift.Task {
-                                        if let ws = env.activeWorkspace {
-                                            await viewModel.deleteTestCase(tc, workspaceId: ws.id)
-                                        }
-                                    }
+                                    testCaseToDelete = tc
+                                    isShowingDeleteConfirmation = true
                                 }) {
                                     Image(systemName: "trash")
                                         .foregroundColor(.red)
@@ -141,9 +141,11 @@ public struct TestingView: View {
                         .buttonStyle(.bordered)
                     Button("Create") {
                         if let ws = env.activeWorkspace {
-                            Swift.Task {
+                            task = Swift.Task {
                                 await viewModel.createTestCase(workspaceId: ws.id)
-                                viewModel.isShowingCreateSheet = false
+                                if !Swift.Task.isCancelled && !viewModel.showError {
+                                    viewModel.isShowingCreateSheet = false
+                                }
                             }
                         }
                     }
@@ -154,17 +156,33 @@ public struct TestingView: View {
             .padding()
             .frame(width: 450)
         }
+        .alert("Delete Test Case", isPresented: $isShowingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { testCaseToDelete = nil }
+            Button("Delete", role: .destructive) {
+                if let tc = testCaseToDelete, let ws = env.activeWorkspace {
+                    task = Swift.Task {
+                        await viewModel.deleteTestCase(tc, workspaceId: ws.id)
+                    }
+                }
+                testCaseToDelete = nil
+            }
+        } message: {
+            if let tc = testCaseToDelete {
+                Text("Are you sure you want to delete \"\(tc.title)\"? This action cannot be undone.")
+            }
+        }
         .onAppear {
             if let ws = env.activeWorkspace {
-                Swift.Task {
+                task = Swift.Task {
                     await viewModel.loadTestCases(workspaceId: ws.id)
                     await viewModel.loadRequirements(workspaceId: ws.id)
                 }
             }
         }
         .onChange(of: env.activeWorkspace?.id) { _, newId in
+            task?.cancel()
             if let id = newId {
-                Swift.Task {
+                task = Swift.Task {
                     await viewModel.loadTestCases(workspaceId: id)
                     await viewModel.loadRequirements(workspaceId: id)
                 }
@@ -172,6 +190,9 @@ public struct TestingView: View {
                 viewModel.testCases = []
                 viewModel.requirements = []
             }
+        }
+        .onDisappear {
+            task?.cancel()
         }
     }
 }

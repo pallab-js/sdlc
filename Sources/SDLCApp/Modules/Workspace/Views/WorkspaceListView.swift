@@ -5,6 +5,11 @@ public struct WorkspaceListView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: WorkspaceListViewModel
     @State private var isShowingCreateSheet = false
+    @State private var task: Swift.Task<Void, Never>?
+    @State private var workspaceToDelete: Workspace?
+    @State private var isShowingDeleteConfirmation = false
+    @State private var exportError: String?
+    @State private var importError: String?
     
     public init(env: AppEnvironment) {
         _viewModel = StateObject(wrappedValue: WorkspaceListViewModel(env: env))
@@ -12,11 +17,34 @@ public struct WorkspaceListView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Workspaces")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                 Spacer()
+                
+                if env.activeWorkspace != nil {
+                    Button(action: exportActiveWorkspace) {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.teal)
+                    
+                    Button(action: importWorkspace) {
+                        Label("Import", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.teal)
+                }
+                
+                Button(action: {
+                    task = Swift.Task {
+                        await env.seedDatabase()
+                    }
+                }) {
+                    Label("Load Sample Data", systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.bordered)
+                .tint(.purple)
                 Button(action: { isShowingCreateSheet = true }) {
                     Label("New Workspace", systemImage: "plus")
                 }
@@ -27,6 +55,36 @@ public struct WorkspaceListView: View {
             .background(Color(nsColor: .windowBackgroundColor))
             
             Divider()
+            
+            if let error = exportError {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.orange)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("Dismiss") { exportError = nil }
+                        .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(Color.orange.opacity(0.1))
+            }
+            
+            if let error = importError {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.red)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("Dismiss") { importError = nil }
+                        .buttonStyle(.plain)
+                }
+                .padding(8)
+                .background(Color.red.opacity(0.1))
+            }
             
             if env.workspaces.isEmpty {
                 EmptyStateView(
@@ -56,9 +114,8 @@ public struct WorkspaceListView: View {
                             }
                             
                             Button(action: {
-                                Swift.Task {
-                                    await env.deleteWorkspace(workspace)
-                                }
+                                workspaceToDelete = workspace
+                                isShowingDeleteConfirmation = true
                             }) {
                                 Image(systemName: "trash")
                                     .foregroundColor(.red)
@@ -116,9 +173,11 @@ public struct WorkspaceListView: View {
                     .buttonStyle(.bordered)
                     
                     Button("Create") {
-                        Swift.Task {
+                        task = Swift.Task {
                             await viewModel.createWorkspace()
-                            isShowingCreateSheet = false
+                            if !Swift.Task.isCancelled && !viewModel.showError {
+                                isShowingCreateSheet = false
+                            }
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -126,12 +185,30 @@ public struct WorkspaceListView: View {
                 }
             }
             .padding()
-            .frame(width: 400)
+            .frame(width: 450)
+        }
+        .alert("Delete Workspace", isPresented: $isShowingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { workspaceToDelete = nil }
+            Button("Delete", role: .destructive) {
+                if let ws = workspaceToDelete {
+                    task = Swift.Task {
+                        await env.deleteWorkspace(ws)
+                    }
+                }
+                workspaceToDelete = nil
+            }
+        } message: {
+            if let ws = workspaceToDelete {
+                Text("Are you sure you want to delete \"\(ws.name)\"? All associated data will be soft-deleted. This action cannot be undone.")
+            }
         }
         .onAppear {
-            Swift.Task {
+            task = Swift.Task {
                 await env.loadWorkspaces()
             }
+        }
+        .onDisappear {
+            task?.cancel()
         }
     }
     
@@ -146,6 +223,47 @@ public struct WorkspaceListView: View {
             viewModel.pathInput = panel.url?.path ?? ""
             if viewModel.nameInput.isEmpty {
                 viewModel.nameInput = panel.url?.lastPathComponent ?? ""
+            }
+        }
+    }
+    
+    private func exportActiveWorkspace() {
+        guard let ws = env.activeWorkspace else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(ws.name.replacingOccurrences(of: " ", with: "_"))_export.json"
+        panel.title = "Export Workspace"
+        
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        
+        task = Swift.Task {
+            do {
+                try await env.exportService.exportWorkspaceToFile(ws, to: url)
+                exportError = nil
+            } catch {
+                exportError = "Export failed: \(error.localizedDescription)"
+                env.logger.error("Export failed: \(error)")
+            }
+        }
+    }
+    
+    private func importWorkspace() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.title = "Import Workspace"
+        
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        
+        task = Swift.Task {
+            do {
+                let data = try await env.exportService.importWorkspace(from: url)
+                try await env.exportService.importWorkspaceData(data)
+                importError = nil
+                await env.loadWorkspaces()
+            } catch {
+                importError = "Import failed: \(error.localizedDescription)"
+                env.logger.error("Import failed: \(error)")
             }
         }
     }

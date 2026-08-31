@@ -17,24 +17,37 @@ public class ProjectListViewModel: ObservableObject {
         self.env = env
     }
     
+    public var filteredProjects: [Project] {
+        projects
+    }
+    
     public func loadProjects(workspaceId: UUID) async {
         do {
             self.projects = try await env.projectRepository.fetchAll(forWorkspace: workspaceId)
         } catch {
+            errorMessage = "Failed to load projects: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to load projects: \(error)")
         }
     }
     
     public func createProject(workspaceId: UUID) async {
-        guard !nameInput.isEmpty else {
-            errorMessage = "Project name cannot be empty."
+        do {
+            try InputValidator.validateName(nameInput, fieldName: "Project name")
+            try InputValidator.validateDescription(descInput)
+        } catch let error as ValidationError {
+            errorMessage = error.message
+            showError = true
+            return
+        } catch {
+            errorMessage = error.localizedDescription
             showError = true
             return
         }
         
         let newProject = Project(
             workspaceId: workspaceId,
-            name: nameInput,
+            name: nameInput.trimmingCharacters(in: .whitespacesAndNewlines),
             description: descInput,
             status: statusInput,
             priority: priorityInput
@@ -51,12 +64,14 @@ public class ProjectListViewModel: ObservableObject {
             )
             await loadProjects(workspaceId: workspaceId)
             
-            // reset
             nameInput = ""
             descInput = ""
             priorityInput = .medium
             statusInput = .todo
+            showError = false
         } catch {
+            errorMessage = "Failed to create project: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to create project: \(error)")
         }
     }
@@ -73,6 +88,8 @@ public class ProjectListViewModel: ObservableObject {
             )
             await loadProjects(workspaceId: workspaceId)
         } catch {
+            errorMessage = "Failed to delete project: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to delete project: \(error)")
         }
     }

@@ -6,6 +6,9 @@ public struct IssueListView: View {
     @State private var selectedProject: Project?
     @State private var projects: [Project] = []
     @State private var isShowingCreateSheet = false
+    @State private var task: Swift.Task<Void, Never>?
+    @State private var issueToDelete: Issue?
+    @State private var isShowingDeleteConfirmation = false
     
     public init(env: AppEnvironment) {
         _viewModel = StateObject(wrappedValue: IssueListViewModel(env: env))
@@ -13,7 +16,6 @@ public struct IssueListView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            // Header with project picker
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Issues & Bugs")
@@ -93,7 +95,6 @@ public struct IssueListView: View {
                             }
                             Spacer()
                             
-                            // Severity
                             Text(issue.severity.displayName)
                                 .font(.system(size: 10, weight: .bold))
                                 .padding(.horizontal, 8)
@@ -102,7 +103,6 @@ public struct IssueListView: View {
                                 .foregroundColor(severityColor(issue.severity))
                                 .cornerRadius(6)
                             
-                            // Priority
                             Text(issue.priority.displayName)
                                 .font(.system(size: 10, weight: .bold))
                                 .padding(.horizontal, 8)
@@ -111,7 +111,6 @@ public struct IssueListView: View {
                                 .foregroundColor(priorityColor(issue.priority))
                                 .cornerRadius(6)
                             
-                            // Status
                             Text(issue.status.displayName)
                                 .font(.system(size: 10, weight: .bold))
                                 .padding(.horizontal, 8)
@@ -121,11 +120,8 @@ public struct IssueListView: View {
                                 .cornerRadius(6)
                             
                             Button(action: {
-                                if let ws = env.activeWorkspace {
-                                    Swift.Task {
-                                        await viewModel.deleteIssue(issue, workspaceId: ws.id)
-                                    }
-                                }
+                                issueToDelete = issue
+                                isShowingDeleteConfirmation = true
                             }) {
                                 Image(systemName: "trash")
                                     .foregroundColor(.red)
@@ -198,9 +194,11 @@ public struct IssueListView: View {
                     
                     Button("Log Issue") {
                         if let ws = env.activeWorkspace, let project = selectedProject {
-                            Swift.Task {
+                            task = Swift.Task {
                                 await viewModel.createIssue(projectId: project.id, workspaceId: ws.id)
-                                isShowingCreateSheet = false
+                                if !Swift.Task.isCancelled && !viewModel.showError {
+                                    isShowingCreateSheet = false
+                                }
                             }
                         }
                     }
@@ -209,23 +207,44 @@ public struct IssueListView: View {
                 }
             }
             .padding()
-            .frame(width: 500)
+            .frame(width: 450)
+        }
+        .alert("Delete Issue", isPresented: $isShowingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { issueToDelete = nil }
+            Button("Delete", role: .destructive) {
+                if let issue = issueToDelete, let ws = env.activeWorkspace {
+                    task = Swift.Task {
+                        await viewModel.deleteIssue(issue, workspaceId: ws.id)
+                    }
+                }
+                issueToDelete = nil
+            }
+        } message: {
+            if let issue = issueToDelete {
+                Text("Are you sure you want to delete \"\(issue.title)\"? This action cannot be undone.")
+            }
         }
         .onAppear {
             loadProjectsList()
         }
         .onChange(of: env.activeWorkspace?.id) { _, _ in
+            task?.cancel()
             selectedProject = nil
+            viewModel.issues = []
             loadProjectsList()
         }
         .onChange(of: selectedProject?.id) { _, newId in
+            task?.cancel()
             if let id = newId {
-                Swift.Task {
+                task = Swift.Task {
                     await viewModel.loadIssues(projectId: id)
                 }
             } else {
                 viewModel.issues = []
             }
+        }
+        .onDisappear {
+            task?.cancel()
         }
     }
     
@@ -234,7 +253,7 @@ public struct IssueListView: View {
             projects = []
             return
         }
-        Swift.Task {
+        task = Swift.Task {
             do {
                 projects = try await env.projectRepository.fetchAll(forWorkspace: ws.id)
                 selectedProject = projects.first

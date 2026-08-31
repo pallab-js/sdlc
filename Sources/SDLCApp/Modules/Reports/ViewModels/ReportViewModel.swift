@@ -7,6 +7,8 @@ public class ReportViewModel: ObservableObject {
 
     @Published public var reportData = ReportData()
     @Published public var isLoading = false
+    @Published public var showError = false
+    @Published public var errorMessage = ""
 
     public init(env: AppEnvironment) {
         self.env = env
@@ -23,6 +25,8 @@ public class ReportViewModel: ObservableObject {
         do {
             reportData = try await env.reportRepository.generateSummary(forWorkspace: workspaceId)
         } catch {
+            errorMessage = "Failed to load report summary."
+            showError = true
             env.logger.error("Failed to load report summary: \(error)")
         }
     }

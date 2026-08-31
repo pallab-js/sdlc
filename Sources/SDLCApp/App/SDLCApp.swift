@@ -2,10 +2,16 @@ import SwiftUI
 
 @main
 struct SDLCApp: App {
-    @StateObject private var env = AppEnvironment()
+    @StateObject private var env: AppEnvironment
     
     init() {
-        // Setup initial configuration if needed
+        let environment: AppEnvironment
+        do {
+            environment = try AppEnvironment()
+        } catch {
+            fatalError("Failed to initialize application: \(error.localizedDescription)")
+        }
+        _env = StateObject(wrappedValue: environment)
     }
     
     var body: some Scene {

@@ -4,6 +4,9 @@ public struct TaskListView: View {
     @EnvironmentObject var env: AppEnvironment
     @StateObject private var viewModel: TaskListViewModel
     @State private var isShowingCreateSheet = false
+    @State private var activeTask: Swift.Task<Void, Never>?
+    @State private var taskToDelete: ProjectTask?
+    @State private var isShowingDeleteConfirmation = false
     public var project: Project
     public var onBack: () -> Void
     
@@ -15,7 +18,6 @@ public struct TaskListView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            // Sub-header
             HStack {
                 Button(action: onBack) {
                     Label("Back to Projects", systemImage: "chevron.left")
@@ -24,10 +26,15 @@ public struct TaskListView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.indigo)
                 
-                Spacer()
-                
-                Text(project.name)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(project.name)
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                    if let ws = env.activeWorkspace {
+                        Text("Workspace: \(ws.name)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
                 
                 Spacer()
                 
@@ -52,12 +59,16 @@ public struct TaskListView: View {
                 )
                 .frame(maxHeight: .infinity)
             } else {
-                HStack(alignment: .top, spacing: 16) {
-                    kanbanColumn(title: "To Do", status: .todo)
-                    kanbanColumn(title: "In Progress", status: .inProgress)
-                    kanbanColumn(title: "Done", status: .done)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 16) {
+                        kanbanColumn(title: "Backlog", status: .backlog)
+                        kanbanColumn(title: "To Do", status: .todo)
+                        kanbanColumn(title: "In Progress", status: .inProgress)
+                        kanbanColumn(title: "In Review", status: .inReview)
+                        kanbanColumn(title: "Done", status: .done)
+                    }
+                    .padding()
                 }
-                .padding()
                 .background(Color.gray.opacity(0.05))
             }
         }
@@ -87,11 +98,11 @@ public struct TaskListView: View {
                 }
                 
                 HStack(spacing: 16) {
-                    Picker("Status", selection: $viewModel.statusInput) {
-                        ForEach([Status.todo, Status.inProgress, Status.done], id: \.self) { status in
-                            Text(status.displayName).tag(status)
-                        }
+                Picker("Status", selection: $viewModel.statusInput) {
+                    ForEach(Status.allCases) { status in
+                        Text(status.displayName).tag(status)
                     }
+                }
                     
                     Picker("Priority", selection: $viewModel.priorityInput) {
                         ForEach(Priority.allCases) { priority in
@@ -120,9 +131,11 @@ public struct TaskListView: View {
                     
                     Button("Create") {
                         if let ws = env.activeWorkspace {
-                            Swift.Task {
+                            activeTask = Swift.Task {
                                 await viewModel.createTask(projectId: project.id, workspaceId: ws.id)
-                                isShowingCreateSheet = false
+                                if !Swift.Task.isCancelled && !viewModel.showError {
+                                    isShowingCreateSheet = false
+                                }
                             }
                         }
                     }
@@ -133,10 +146,28 @@ public struct TaskListView: View {
             .padding()
             .frame(width: 450)
         }
+        .alert("Delete Task", isPresented: $isShowingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { taskToDelete = nil }
+            Button("Delete", role: .destructive) {
+                if let t = taskToDelete, let ws = env.activeWorkspace {
+                    self.activeTask = Swift.Task {
+                        await viewModel.deleteTask(t, workspaceId: ws.id)
+                    }
+                }
+                taskToDelete = nil
+            }
+        } message: {
+            if let t = taskToDelete {
+                Text("Are you sure you want to delete \"\(t.title)\"? This action cannot be undone.")
+            }
+        }
         .onAppear {
-            Swift.Task {
+            activeTask = Swift.Task {
                 await viewModel.loadTasks(projectId: project.id)
             }
+        }
+        .onDisappear {
+            activeTask?.cancel()
         }
     }
     
@@ -154,14 +185,14 @@ public struct TaskListView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color.secondary.opacity(0.15))
-                    .cornerRadius(8)
+                    .cornerRadius(6)
             }
             .padding(.horizontal, 8)
             
             ScrollView {
                 VStack(spacing: 10) {
-                    ForEach(filteredTasks) { task in
-                        taskCard(task: task)
+                    ForEach(filteredTasks) { t in
+                        taskCard(task: t)
                     }
                 }
                 .padding(.vertical, 4)
@@ -175,7 +206,7 @@ public struct TaskListView: View {
         )
     }
     
-    private func taskCard(task: Task) -> some View {
+    private func taskCard(task: ProjectTask) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(task.title)
@@ -185,11 +216,16 @@ public struct TaskListView: View {
                 Spacer()
                 
                 Menu {
+                    Button("Move to Backlog") { moveTask(task, to: .backlog) }
                     Button("Move to To Do") { moveTask(task, to: .todo) }
                     Button("Move to In Progress") { moveTask(task, to: .inProgress) }
+                    Button("Move to In Review") { moveTask(task, to: .inReview) }
                     Button("Move to Done") { moveTask(task, to: .done) }
                     Divider()
-                    Button("Delete", role: .destructive) { deleteTask(task) }
+                    Button("Delete", role: .destructive) {
+                        taskToDelete = task
+                        isShowingDeleteConfirmation = true
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .foregroundColor(.secondary)
@@ -206,23 +242,21 @@ public struct TaskListView: View {
             }
             
             HStack {
-                // Priority Badge
                 Text(task.priority.displayName)
-                    .font(.system(size: 9, weight: .bold))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
+                    .font(.system(size: 10, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                     .background(priorityColor(task.priority).opacity(0.15))
                     .foregroundColor(priorityColor(task.priority))
-                    .cornerRadius(4)
+                    .cornerRadius(6)
                 
                 Spacer()
                 
-                // Due Date Badge
                 if let due = task.dueDate {
                     HStack(spacing: 4) {
                         Image(systemName: "calendar")
                             .font(.system(size: 10))
-                        Text(formatDate(due))
+                        Text(Self.formatDate(due))
                             .font(.system(size: 10))
                     }
                     .foregroundColor(.secondary)
@@ -237,20 +271,22 @@ public struct TaskListView: View {
         )
     }
     
-    private func moveTask(_ task: Task, to status: Status) {
+    private func moveTask(_ task: ProjectTask, to status: Status) {
         if let ws = env.activeWorkspace {
-            Swift.Task {
+            self.activeTask = Swift.Task {
                 await viewModel.updateTaskStatus(task, to: status, workspaceId: ws.id)
             }
         }
     }
     
-    private func deleteTask(_ task: Task) {
-        if let ws = env.activeWorkspace {
-            Swift.Task {
-                await viewModel.deleteTask(task, workspaceId: ws.id)
-            }
-        }
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        return formatter
+    }()
+    
+    private static func formatDate(_ date: Date) -> String {
+        dateFormatter.string(from: date)
     }
     
     private func priorityColor(_ priority: Priority) -> Color {
@@ -260,11 +296,5 @@ public struct TaskListView: View {
         case .high: return .orange
         case .critical: return .red
         }
-    }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        return formatter.string(from: date)
     }
 }

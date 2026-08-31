@@ -13,17 +13,18 @@ public struct ContentView: View {
                 NavigationLink(value: module) {
                     Label(module.rawValue, systemImage: module.iconName)
                 }
+                .accessibilityLabel(module.rawValue)
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
             
-            // Workspace status bar at the bottom of the sidebar
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
                     Divider()
                     HStack {
                         Image(systemName: "folder.fill")
                             .foregroundColor(.indigo)
+                            .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             if let ws = env.activeWorkspace {
                                 Text(ws.name)
@@ -61,7 +62,7 @@ public struct ContentView: View {
                     })
                 }
             case .wiki:
-                WikiView()
+                WikiView(env: env)
             case .git:
                 GitView()
             case .search:
@@ -79,6 +80,42 @@ public struct ContentView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 600)
+        .onChange(of: env.activeWorkspace?.id) { _, _ in
+            if selectedProject != nil, env.activeWorkspace == nil {
+                selectedProject = nil
+            }
+        }
+        .alert("Error", isPresented: .init(
+            get: { env.appError != nil },
+            set: { if !$0 { env.appError = nil } }
+        )) {
+            Button("OK") { env.appError = nil }
+        } message: {
+            if let error = env.appError {
+                Text(error.message)
+            }
+        }
+        .keyboardShortcut("1", modifiers: [.command])
+        .onAppear {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                if event.modifierFlags.contains(.command) {
+                    switch event.keyCode {
+                    case KeyCode.cmd1: selectedModule = .workspaces; return nil
+                    case KeyCode.cmd2: selectedModule = .projects; return nil
+                    case KeyCode.cmd3: selectedModule = .wiki; return nil
+                    case KeyCode.cmd4: selectedModule = .git; return nil
+                    case KeyCode.cmd5: selectedModule = .search; return nil
+                    case KeyCode.cmd6: selectedModule = .requirements; return nil
+                    case KeyCode.cmd7: selectedModule = .issues; return nil
+                    case KeyCode.cmd8: selectedModule = .reports; return nil
+                    case KeyCode.cmd9: selectedModule = .testing; return nil
+                    case KeyCode.cmd0: selectedModule = .auditLog; return nil
+                    default: break
+                    }
+                }
+                return event
+            }
+        }
     }
 }
 

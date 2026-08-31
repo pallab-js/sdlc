@@ -28,6 +28,8 @@ public class TestingViewModel: ObservableObject {
         do {
             testCases = try await env.testingRepository.fetchAll(forWorkspace: workspaceId)
         } catch {
+            errorMessage = "Failed to load test cases: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to load test cases: \(error)")
         }
     }
@@ -41,15 +43,23 @@ public class TestingViewModel: ObservableObject {
     }
 
     public func createTestCase(workspaceId: UUID) async {
-        guard !testCaseInput.title.isEmpty else {
-            errorMessage = "Test case title cannot be empty."
+        do {
+            try InputValidator.validateName(testCaseInput.title, fieldName: "Test case title")
+            try InputValidator.validateDescription(testCaseInput.description)
+            try InputValidator.validateDescription(testCaseInput.expectedResult)
+        } catch let error as ValidationError {
+            errorMessage = error.message
+            showError = true
+            return
+        } catch {
+            errorMessage = error.localizedDescription
             showError = true
             return
         }
 
         let newTestCase = TestCase(
             requirementId: testCaseInput.requirementId,
-            title: testCaseInput.title,
+            title: testCaseInput.title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: testCaseInput.description,
             expectedResult: testCaseInput.expectedResult
         )
@@ -66,10 +76,11 @@ public class TestingViewModel: ObservableObject {
             await loadTestCases(workspaceId: workspaceId)
 
             testCaseInput = TestCaseInput()
+            showError = false
         } catch {
-            env.logger.error("Failed to create test case: \(error)")
-            errorMessage = "Failed to create test case."
+            errorMessage = "Failed to create test case: \(error.localizedDescription)"
             showError = true
+            env.logger.error("Failed to create test case: \(error)")
         }
     }
 
@@ -85,6 +96,8 @@ public class TestingViewModel: ObservableObject {
             )
             await loadTestCases(workspaceId: workspaceId)
         } catch {
+            errorMessage = "Failed to delete test case: \(error.localizedDescription)"
+            showError = true
             env.logger.error("Failed to delete test case: \(error)")
         }
     }
